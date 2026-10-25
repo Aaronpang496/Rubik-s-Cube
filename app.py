@@ -1,115 +1,202 @@
 import streamlit as st
 import streamlit.components.v1 as components
-import base64
 
-# Configure page layout to wide mode
+# Set up page configurations
 st.set_page_config(page_title="3D Rubik's Cube Mobile", layout="wide")
 
-# The entire 3D app completely compressed into a single safe-text string
-safe_encoded_block = (
-    "PCFET0NUWVBFIGh0bWw+CjxodG1sIGxhbmc9ImVuIj4KPGhlYWQ+CjxtZXRhIGNoYXJzZXQ9IlVURi04Ij4K"
-    "PG1ldGEgbmFtZT0idmlld3BvcnQiIGNvbnRlbnQ9IndpZHRoPWRldmljZS13aWR0aCwgaW5pdGlhbC1zY2Fs"
-    "ZT0xLjAsIG1heGltdW0tc2NhbGU9MS4wLCB1c2VyLXNjYWxhYmxlPW5vIj4KPHRpdGxlPjNEIFJ1YmlrJ3Mg"
-    "Q3ViZSBNb2JpbGU8L3RpdGxlPgo8c3R5bGU+CiAgKiB7IGJveC1zaXppbmdzOiBib3JkZXItYm94OyB1c2Vy"
-    "LXNlbGVjdDogbm9uZTsgLXdua2l0LXVzZXItc2VsZWN0OiBub25lOyB9CiAgYm9keSB7IG1hcmdpbjogMDsg"
-    "b3ZlcmZsb3c6IGhpZGRlbjsgYmFja2dyb3VuZC1jb2xvcjogIzBmMTcyYTsgdG91Y2gtYWN0aW9uOiBub25l"
-    "OyBmb250LWZhbWlseTogc3lzdGVtLXVpLCBzYW5zLXNlcmlmOyBoZWlnaHQ6IDEwMHZoOyB3aWR0aDogMTAw"
-    "dnc7IH0KICBjYW52YXMgeyBkaXNwbGF5OiBibG9jazsgd2lkdGg6IDEwMCU7IGhlaWdodDogMTAwJTsgfQog"
-    "ICN1aSB7IHBvc2l0aW9uOiBhYnNvbHV0ZTsgdG9wOiAyMHB4OyBsZWZ0OiAwOyB3aWR0aDogMTAwJTsgZGlz"
-    "cGxheTogZmxleDsgZmxleC1kaXJlY3Rpb246IGNvbHVtbjsgYWxpZ24taXRlbXM6IGNlbnRlcjsgcG9pbnRl"
-    "ci1ldmVudHM6IG5vbmU7IGNvbG9yOiB3aGl0ZTsgemluZGV4OiAxMDsgfQogICN0aW1lciB7IGZvbnQtc2l6"
-    "ZTogY2xhbXAoMzJweCwgOHZ3LCA0OHB4KTsgZm9udC13ZWlnaHQ6IGJvbGQ7IGZvbnQtdmFyaWFudC1udW1l"
-    "cmljOiB0YWJ1bGFyLW51bXM7IHRleHQtc2hhZG93OiAwIDRweCAxMHB4IHJnYmEoMCwwLDAsMC44KTsgY29s"
-    "b3I6ICNmYWNjMTU7IH0KICAjaW5zdHJ1Y3Rpb25zIHsgbWFyZ2luLXRvcDogNXB4OyBmb250LXNpemU6IGNs"
-    "YW1wKDExcHgsIDMuNXZ3LCAxNHB4KTsgY29sb3I6ICM5NGEzYjg7IHRleHQtYWxpZ246IGNlbnRlcjsgcGFk"
-    "ZGluZzogMCAxMHB4OyB9CiAgI2NvbnRyb2xzLWNvbnRhaW5lciB7IHBvc2l0aW9uOiBhYnNvbHV0ZTsgYm90"
-    "dG9tOiAzMHB4OyB3aWR0aDogMTAwJTsgZGlzcGxheTogZmxleDsganVzdGlmeS1jb250ZW50OiBjZW50ZXI7"
-    "IGdhcDogMTVweDsgemluZGV4OiAxMDsgfQogIGJ1dHRvbiB7IHBvaW50ZXItZXZlbnRzOiBhdXRvOyBiYWNr"
-    "Z3JvdW5kOiAjMjU2M2ViOyBjb2xvcjogd2hpdGU7IGJvcmRlcjogbm9uZTsgcGFkZGluZzogMTJweCAyNHB4"
-    "OyBmb250LXNpemU6IDE2cHg7IGZvbnQtdmFyaWFudDogYm9sZDsgYm9yZGVyLXJhZGl1czogOHB4OyBib3gt"
-    "c2hhZG93OiAwIDRweAogNnB4IC0xcHggcmdiYSgwLDAsMCwwLjMpOyB9CiAgYnV0dG9uOmFjdGl2ZSB7IGJh"
-    "Y2tncm91bmQ6ICMxZDRlZDg7IH0KICAjd2luLXNjcmVlbiB7IHBvc2l0aW9uOiBhYnNvbHV0ZTsgdG9wOiAw"
-    "OyBsZWZ0OiAwOyB3aWR0aDogMTAwJT基层laWdodDogMTAwJTsgYmFja2dyb3VuZDogcmdiYSgxNSwgMjMs"
-    "IDQyLCAwLjg1KTsgZGlzcGxheTogZmxleDsgZmxleC1kaXJlY3Rpb246IGNvbHVtbjsganVzdGlmeS1jb250"
-    "ZW50OiBjZW50ZXI7IGFsaWduLWl0ZW1zOiBjZW50ZXI7IGNvbG9yOiAjNGFkZTgwOyBmb250LXNpemU6IDMy"
-    "cHg7IGZvbnQtdmVpZ2h0OiBib2xkOyBvcGFjaXR5OiAwOyBwb2ludGVyLWV2ZW50czogbm9uZTsgdHJhbnNp"
-    "dGlvbjogb3BhY2l0eSAwLjVzIGVhc2U7IHppbuZkZXg6IDIwOyB0ZXh0LWFsaWduOiBjZW50ZXI7IH0KICAj"
-    "d2luLXNjcmVlbi5zaG93IHsgb3BhY2l0eTogMTsgcG9pbnRlci1ldmVudHM6IGF1dG87IH0KICAjd2luLXNj"
-    "cmVlbiBzcGFuIHsgY29sb3I6IHdoaXRlOyBmb250LXNpemU6IDIwcHg7IG1hcmdpbi10b3A6IDEwcHg7IH0K"
-    "PC9zdHlsZT4KPHNjcmlwdCBzcmM9Imh0dHBzOi8vY2RuLmpzZGVsaXZyLm5ldC9ucG0vdGhyZWVAMC4xNjAu"
-    "MC9idWlsZC90aHJlZS5taW4uanMiPjwvc2NyaXB0Pgo8c3NyaXB0IHNyYz0iaHR0cHM6Ly9jZG4uanNkZWxp"
-    "dnIubmV0L25wbS90aHJlZUAwLjE2MC4wL2V4YW1wbGVzL2pzL2NvbnRyb2xzL09yYml0Q29udHJvbHMuanMi"
-    "Pjwvc2NyaXB0Pgo8L2hlYWQ+Cjxib2R5Pgo8ZGl2IGlkPSJ1aSI+CiAgPGRpdiBpZD0idGltZXIiPjAwOjAw"
-    "LjA8L2Rpdj4KICA8ZGl2IGlkPSJpbnN0cnVjdGlvbnMiPlN3aXBlIGJhY2tncm91bmQgdG8gdHVybiBjdWJl"
-    "IKidIERyYWcgYSBzdGlja2VyIGZhY2UgdG8gdHdpc3Qgc2xpY2U8L2Rpdj4KPC9kaXY+CjxkaXYgaWQ9ImNv"
-    "bnRyb2xzLWNvbnRhaW5lciI+CiAgPGJ1dHRvbiBpZD0ic2NyYW1ibGUtYnRuIj5TY3JhbWJsZTwvYnV0dG9u"
-    "Pgo8L2Rpdj4KPGRpdiBpZD0id2luLXNjcmVlbiI+CiAg87+OqyBDVUJFIFNPTFZFRCEg87+OegoAICA8c3Bh"
-    "biBpZD0iZmluYWwtdGltZSI+WW91ciB0aW1lOiAtLTotLS4tPC9zcGFuPgogIDidYnV0dG9uIGlkPSJyZXN0"
-    "YXJ0LWJ0biIgc3R5bGU9Im1hcmdpbi10b3A6IDIwcHg7IGJhY2tncm91bmQ6ICM0YWRlODA7IGNvbG9yOiAj"
-    "MGYxNzJhOyI+UGxheSBBZ2FpbjwvYnV0dG9uPgo8L2Rpdj4KPHNjcmlwdD4KICBjb25zdCB0aW1lckRpc3Bs"
-    "YXkgPSBkb2N1bWVudC5nZXRFbGVtZW50QnlJZCgidGltZXIiKTsKICBsZXQgc3RhcnRUaW1lID0gRGF0ZS5u"
-    "b3coKTsgbGV0IHRpbWVyQWN0aXZlID0gZmFsc2U7IGxldCBoYXNTY3JhbWJsZWQgPSBmYWxzZTsKICBmdW5j"
-    "dGlvbiB1cGRhdGVUaW1lcigpIHsKICAgIGlmICghdGltZXJBY3RpdmUpIHJldHVybjsKICAgIGNvbnN0IGVs"
-    "YXBzZWQgPSBEYXRlLm5vdygpIC0gc3RhcnRUaW1lOwogICAgY29uc3QgbWludXRlcyA9IE1hdGguZmxvb3Io"
-    "ZWxhcHNlZCAvIDYwMDAwKTsKICAgIGNvbnN0IHNlY29uZHMgPSBNYXRoLmZsb29yKChlbGFwc2VkICUgNjAw"
-    "MDApIC8gMTAwMCk7CICAgIGNvbnN0IHRlbnRocyA9IE1hdGguZmxvb3IoKGVsYXBzZWQgJSAxMDAwKSAvIDEw"
-    "MCk7CiAgICB0aW1lckRpc3BsYXkudGV4dENvbnRlbnQgPSBgJHtTdHJpbmcobWludXRlcykucGFkU3RhcnQo"
-    "MiwgIjAiKX06JHtTdHJpbmcoc2Vjb25kcykucGFkU3RhcnQoMiwgIjAiKX0uJHt0ZW50aHN9YDsKICAgIHJl"
-    "cXVlc3RBbmltYXRpb25GcmFtZSh1cGRhdGVUaW1lcik7CiAgfQogIGNvbnN0IHNjZW5lID0gbmV3IFRIUkVF"
-    "LlNjZW5lKCk7CiAgY29uc3QgY2FtZXJhID0gbmV3IFRIUkVFLlBlcnNwZWN0aXZlQ2FtZXJhKDQ1LCB3aW5k"
-    "b3cuaW5uZXJXaWR0aCAvIHdpbmRvdy5pbm5lckhlaWdodCwgMC4xLCAxMDAwKTsKICBjYW52ZXJhLnBvc2l0"
-    "aW9uLnNldCg0LCA0LCA2KTsKICBjb25zdCByZW5kZXJlciA9IG5ldyBUSFJFRS5XZWJHTFJlbmRlcmVyKHsg"
-    "YW50aWFsaWFzOiB0cnVlIH0pOwogIHJlbmRlcmVyLnNldFNpemUod2luZG93LmlubmVyV2lkdGgsIHdpbmRv"
-    "dy5pbm5lckhlaWdodCk7CiAgZG9jdW1lbnQuYm9keS5hcHBlbmRDaGlsZChyZW5kZXJlci5kb21FbGVtZW50"
-    "KTsKICBjb25zdCBjb250cm9scyA9IG5ldyBUSFJFRS5PcmJpdENvbnRyb2xzKGNhbWVyYSwgcmVuZGVyZXIu"
-    "ZG9tRWxlbWVudCk7CiAgY29udHJvbHMuZW5hYmxlRGFtcGluZyA9IHRydWU7IGNvbnRyb2xzLmRhbXBpbmdG"
-    "YWN0b3IgPSAwLjA1OyBjb250cm9scy5lbmFibGVab29tID0gdHJ1ZTsgY29udHJvbHMuZW5hYmxlUGFuID0g"
-    "ZmFsc2U7CiAgY29uc3QgYW1iaWVudExpZ2h0ID0gbmV3IFRIUkVFLkFtYmllbnRMaWdodCgweGZmZmZmZiwg"
-    "MC43KTsgc2NlbmUuYWRkKGFtYmllbnRMaWdodCk7CiAgY29uc3QgZGlyTGlnaHQgPSBuZXcgVEhSRUUuRGly"
-    "ZWN0aW9uYWxMaWdodCgweGZmZmZmZiwgMC44KTsgZGlyTGlnaHQucG9zaXRpb24uc2V0KDEwLCAxMCwgMTAp"
-    ;IHNjZW5lLmFkZChkaXJMaWdodCk7CiAgY29uc3QgZGlyTGlnaHQyID0gbmV3IFRIUkVFLkRpcmVjdGlvbmFs"
-    "TGlnaHQgKDB4ZmZmZmZmLCAwLjMpOyBkaXJMaWdodDIucG9zaXRpb24uc2V0KC0xMCwgLTEwLCAtMTApOyBz"
-    "Y2VuZS5hZGQoZGlyTGlnaHQyKTsKICBjb25zdCBzaXplID0gMC45MjsgY29uc3QgZ2FwID0gMS4wOwogIGNv"
-    "bnN0IGNvbG9ycyA9IHsgcmlnaHQ6IDB4YjkxYzFjLCBsZWZ0OiAweGVhNTgwYywgdG9wOiAweGY4ZmFmYywg"
-    "Ym90dG9tOiAweGVhYjMwOCwgZnJvbnQ6IDB4MTZhMzRhLCBiYWNrOiAweDI1NjNlYiB9OwogIGNvbnN0IGN1"
-    "YmVHcm91cCA9IG5ldyBUSFJFRS5Hcm91cCgpOyBzY2VuZS5hZGQoY3ViZUdyb3VwKTsKICBjb25zdCBjdWJl"
-    "cyA9IFtdOwogIGZ1bmN0aW9uIGNyZWF0ZVN0aWNrZXJUZXh0dXJlKGNvbG9ySGV4KSB7CiAgICBjb25zdCBj"
-    "YW52YXMgPSBkb2N1bWVudC5jcmVhdGVFbGVtZW50KCJjYW52YXMiKTsgY2FudmFzLndpZHRoID0gMjU2OyBj"
-    "YW52YXMuaGVpZ2h0ID0gMjU2OwogICAgY29uc3QgY3R4ID0gY2FudmFzLmdldENvbnRleHQoIjJkIik7IGN0"
-    "eC5maWxsU3R5bGUgPSAiIzExMTExMSI7IGN0eC5maWxsUmVjdCgwLCAwLCAyNTYsIDI1Nik7IGN0eC5maWxs"
-    "U3R5bGUgPSBjb2xvckhleDsKICAgIGlmKGN0eC5yb3VuZFJlY3QpIHsgY3R4LnJvdW5kUmVjdCgxNiwgMTYs"
-    "IDIyNCwgMjI0LCAzMik7IH0gZWxzZSB7IGN0eC5yZWN0KDE2LCAxNiwgMjI0LCAyMjQpOyB9CiAgICBjdHgu"
-    "ZmlsbCgpOyByZXR1cm4gbmV3IFRIUkVFLkNhbnZhc1RleHR1cmUoY2FudmFzKTsKICB9CiAgY29uc3QgYmxh"
-    "Y2tNYXQgPSBuZXcgVEhSRUUuTWVzaFN0YW5kYXJkTWF0ZXJpYWwoeyBjb2xvcjogMHgxMTExMTEsIHJvdWdo"
-    "bmVzczogMC41IH0pOwogIGNvbnN0IHN0aWNrZXJNYXRzID0gewogICAgcmlnaHQ6IG5ldyBUSFJFRS5NZXNo"
-    "U3RhbmRhcmRNYXRlcmlhbCh7IG1hcDogY3JlYXRlU3RpY2tlclRleHR1cmUoIiNiOTFjMWMiKSwgcm91Z2hu"
-    "ZXNzOiAwLjIgfSksCiAgICBsZWZ0OiBuZXcgVEhSRUUuTWVzaFN0YW5kYXJkTWF0ZXJpYWwoeyBtYXA6IGNy"
-    "ZWF0ZVN0aWNrZXJUZXh0dXJlKCIjZWE1ODBjIiksIHJvdWdobmVzczogMC4yIH0pLAogICAgdG9wOiBuZXcg"
-    "VEhSRUUuTWVzaFN0YW5kYXJkTWF0ZXJpYWwoeyBtYXA6IGNyZWF0ZVN0aWNrZXJUZXh0dXJlKCIjZjhmYWZj"
-    "IiksIHJvdWdobmVzczogMC4yIH0pLAog   Ym90dG9tOiBuZXcgVEhSRUUuTWVzaFN0YW5kYXJkTWF0ZXJp"
-    "YWwoeyBtYXA6IGNyZWF0ZVN0aWNrZXJUZXh0dXJlKCIjZWFiMzA4IiksIHJvdWdobmVzczogMC4yIH0pLAog"
-    "ICAgZnJvbnQ6IG5ldyBUSFJFRS5NZXNoU3RhbmRhcmRNYXRlcmlhbCh7IG1hcDogY3JlYXRlU3RpY2tlclRl"
-    "eHR1cmUoIiMxNmEzNGEiKSwgcm91Z2dobmVzczogMC4yIH0pLAogICAgYmFjayA6IG5ldyBUSFJFRS5NZXNo"
-    "U3RhbmRhcmRNYXRlcmlhbCh7IG1hcDogY3JlYXRlU3RpY2tlclRleHR1cmUoIiMyNTYzZWIiKSwgcm91Z2hu"
-    "ZXNzOiAwLjIgfSkKICB9OwogIGZvciAobGV0IHggPSAtMTsgeCA8PSAxOyB4KyspIHsKICAgIGZvciAobGV0"
-    "IHkgPSAtMTsgeSA8PSAxOyB5KyspIHsKICAgICAgZm9yIChsZXQgeiA9IC0xOyB6IDw9IDE7IHonKykgewog"
-    "ICAgICAgIGlmICh4ID09PSAwICYmIHkgPT09IDAgJiYgeiA9PT0gMCkgY29udGludWU7CiAgICAgICAgY29u"
-    "c3QgaG9sZU1hdGVyaWFscyA9IFsKICAgICAgICAgICh4ID09PSAxKSA/IHN0aWNrZXJNYXRzLnJpZ2h0IDog"
-    "YmxhY2tNYXQsICh4ID09PSAtMSkgPyBzdGlja2VyTWF0cy5sZWZ0IDogYmxhY2tNYXQsCiAgICAgICAgICAg"
-    "KHkgPT09IDEpID8gc3RpY2tlck1hdHMudG9wIDogYmxhY2tNYXQsICh5ID09PSAtMSkgPyBzdGlja2VyTWF0"
-    "cy5ib3R0b20gOiBibGFja01hdCwKICAgICAgICAgICh6ID09PSAxKSA/IHN0aWNrZXJNYXRzLmZyb250IDog"
-    "YmxhY2tNYXQsICh6ID09PSAtMSkgPyBzdGlja2VyTWF0cy5iYWNrIDogYmxhY2tNYXQKICAgICAgICBdOwog"
-    "ICAgICAgIGNvbnN0IGdlb21ldHJ5ID0gbmV3IFRIUkVFLkJveEdlb21ldHJ5KHNpemUsIHNpemUsIHNpemUp"
-    "OwogICAgICAgIGNvbnN0IGN1YmUgPSBuZXcgVEhSRUUuTWVzaChnZW9tZXRyeSwgaG9sZU1hdGVyaWFscyk7"
-    "CiAgICAgICAgY3ViZS5wb3NpdGlvbi5zZXQoeCAqIGdhcCwgeSAqIGdhcCwgeiAqIGdhcCk7IGN1YmUudXNl"
-    "ckRhdGEgPSB7IGluaXRpYWxYOiB4LCBpbml0aWFsWTogeSwgaW5pdGlhbFo6IHogfTsKICAgICAgICBjdWJl"
-    "R3JvdXAuYWRkKGN1YmUpOyBjdWJlcy5wdXNoKGN1YmUpOwogICAgICB9CiAgICB9CiAgfQogIGNvbnN0IHJh"
-    "eWNhc3RlciA9IG5ldyBUSFJFRS5SYXljYXN0ZXIoKTsgbGV0IGlzVHJhbnNpdGlvbmluZyA9IGZhbHNlOwog"
-    "IGxldCBwb2ludGVyU3RhcnRYID0gMCwgcG9pbnRlclN0YXJ0WSA9IDA7IGxldCBpbnRlcnNlY3RlZEN1YmUg"
-    "PSBudWxsLCBpbnRlcnNlY3RlZEZhY2VOb3JtYWwgPSBudWxsOwogIHdpbmRvdy5hZGRFdmVudExpc3RlbmVy"
-    "KCJwb2ludGVyZG93biIsIChlKSA9PiB7CiAgICBpZiAoaXNUcmFuc2l0aW9uaW5nKSByZXR1cm47CiAgICBj"
-    "b25zdCBtb3VzZSA9IG5ldyBUSFJFRS5WZWN0b3IyKChlLmNsaWVudCAvIHdpbmRvdy5pbm5lcklkdGgpICog"
-    "MiAtIDEsIC0oZS5jbGllbnQgLyB3aW5kb3cuaW5uZXJIZWlnaHQpICogMiArIDEpOwogICAgcmF5Y2FzdGVy"
-    "LnNldEZyb21DYW1lcmEobW91c2UsIGNhbWVyYSk7IGNvbnN0IGludGVyc2VjdHMgPSByYXljYXN0ZXIuaW50"
-    "ZXJzZWN0T2JqZWN0cyhjdWJlcyk7CiAgICBpZiAoaW50ZXJzZWN0cy5sZW5ndGggPiAwKSB7CiAgICAgIGNv"
-    "bnRyb2xzLmVuYWJsZWQgPSBmYWxzZTsgaW50ZXJzZWN0ZWRDdWJlID0gaW50ZXJzZWN0c1swXS5vYmplY3Q7"
+# We build the HTML line by line as plain strings to prevent copy-paste text truncation bugs
+game_ui_lines = [
+    '<!DOCTYPE html>',
+    '<html lang="en">',
+    '<head>',
+    '<meta charset="UTF-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">',
+    '<title>3D Rubik\'s Cube Mobile</title>',
+    '<style>',
+    '  * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }',
+    '  body { margin: 0; overflow: hidden; background-color: #0f172a; touch-action: none; font-family: system-ui, sans-serif; height: 100vh; width: 100vw; }',
+    '  canvas { display: block; width: 100%; height: 100%; }',
+    '  #ui { position: absolute; top: 20px; left: 0; width: 100%; display: flex; flex-direction: column; align-items: center; pointer-events: none; color: white; z-index: 10; }',
+    '  #timer { font-size: clamp(32px, 8vw, 48px); font-weight: bold; font-variant-numeric: tabular-nums; text-shadow: 0 4px 10px rgba(0,0,0,0.8); color: #facc15; }',
+    '  #instructions { margin-top: 5px; font-size: clamp(11px, 3.5vw, 14px); color: #94a3b8; text-align: center; padding: 0 10px; }',
+    '  #controls-container { position: absolute; bottom: 30px; width: 100%; display: flex; justify-content: center; gap: 15px; z-index: 10; }',
+    '  button { pointer-events: auto; background: #2563eb; color: white; border: none; padding: 12px 24px; font-size: 16px; font-weight: bold; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3); }',
+    '  button:active { background: #1d4ed8; }',
+    '  #win-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(15, 23, 42, 0.85); display: flex; flex-direction: column; justify-content: center; align-items: center; color: #4ade80; font-size: 32px; font-weight: bold; opacity: 0; pointer-events: none; transition: opacity 0.5s ease; z-index: 20; text-align: center; }',
+    '  #win-screen.show { opacity: 1; pointer-events: auto; }',
+    '  #win-screen span { color: white; font-size: 20px; margin-top: 10px; }',
+    '</style>',
+    '<script src="https://jsdelivr.net"></script>',
+    '<script src="https://jsdelivr.net"></script>',
+    '</head>',
+    '<body>',
+    '<div id="ui">',
+    '  <div id="timer">00:00.0</div>',
+    '  <div id="instructions">Swipe background to turn cube • Drag a sticker face to twist slice</div>',
+    '</div>',
+    '<div id="controls-container">',
+    '  <button id="scramble-btn">Scramble</button>',
+    '</div>',
+    '<div id="win-screen">',
+    '  🎉 CUBE SOLVED! 🎉',
+    '  <span id="final-time">Your time: --:--.-</span>',
+    '  <button id="restart-btn" style="margin-top: 20px; background: #4ade80; color: #0f172a;">Play Again</button>',
+    '</div>',
+    '<script>',
+    '  const timerDisplay = document.getElementById("timer");',
+    '  let startTime = Date.now();',
+    '  let timerActive = false;',
+    '  let hasScrambled = false;',
+    '  function updateTimer() {',
+    '    if (!timerActive) return;',
+    '    const elapsed = Date.now() - startTime;',
+    '    const minutes = Math.floor(elapsed / 60000);',
+    '    const seconds = Math.floor((elapsed % 60000) / 1000);',
+    '    const tenths = Math.floor((elapsed % 1000) / 100);',
+    '    timerDisplay.textContent = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${tenths}`;',
+    '    requestAnimationFrame(updateTimer);',
+    '  }',
+    '  const scene = new THREE.Scene();',
+    '  const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);',
+    '  camera.position.set(4, 4, 6);',
+    '  const renderer = new THREE.WebGLRenderer({ antialias: true });',
+    '  renderer.setSize(window.innerWidth, window.innerHeight);',
+    '  document.body.appendChild(renderer.domElement);',
+    '  const controls = new THREE.OrbitControls(camera, renderer.domElement);',
+    '  controls.enableDamping = true; controls.dampingFactor = 0.05; controls.enableZoom = true; controls.enablePan = false;',
+    '  const ambientLight = new THREE.AmbientLight(0xffffff, 0.7); scene.add(ambientLight);',
+    '  const dirLight = new THREE.DirectionalLight(0xffffff, 0.8); dirLight.position.set(10, 10, 10); scene.add(dirLight);',
+    '  const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.3); dirLight2.position.set(-10, -10, -10); scene.add(dirLight2);',
+    '  const size = 0.92; const gap = 1.0;',
+    '  const colors = { right: 0xb91c1c, left: 0xea580c, top: 0xf8fafc, bottom: 0xeab308, front: 0x16a34a, back: 0x2563eb };',
+    '  const cubeGroup = new THREE.Group(); scene.add(cubeGroup);',
+    '  const cubes = [];',
+    '  function createStickerTexture(colorHex) {',
+    '    const canvas = document.createElement("canvas"); canvas.width = 256; canvas.height = 256;',
+    '    const ctx = canvas.getContext("2d"); ctx.fillStyle = "#111111"; ctx.fillRect(0, 0, 256, 256); ctx.fillStyle = colorHex;',
+    '    if(ctx.roundRect) { ctx.roundRect(16, 16, 224, 224, 32); } else { ctx.rect(16, 16, 224, 224); }',
+    '    ctx.fill(); return new THREE.CanvasTexture(canvas);',
+    '  }',
+    '  const blackMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.5 });',
+    '  const stickerMats = {',
+    '    right: new THREE.MeshStandardMaterial({ map: createStickerTexture("#b91c1c"), roughness: 0.2 }),',
+    '    left: new THREE.MeshStandardMaterial({ map: createStickerTexture("#ea580c"), roughness: 0.2 }),',
+    '    top: new THREE.MeshStandardMaterial({ map: createStickerTexture("#f8fafc"), roughness: 0.2 }),',
+    '    bottom: new THREE.MeshStandardMaterial({ map: createStickerTexture("#eab308"), roughness: 0.2 }),',
+    '    front: new THREE.MeshStandardMaterial({ map: createStickerTexture("#16a34a"), roughness: 0.2 }),',
+    '    back: new THREE.MeshStandardMaterial({ map: createStickerTexture("#2563eb"), roughness: 0.2 })',
+    '  };',
+    '  for (let x = -1; x <= 1; x++) {',
+    '    for (let y = -1; y <= 1; y++) {',
+    '      for (let z = -1; z <= 1; z++) {',
+    '        if (x === 0 && y === 0 && z === 0) continue;',
+    '        const holeMaterials = [',
+    '          (x === 1) ? stickerMats.right : blackMat, (x === -1) ? stickerMats.left : blackMat,',
+    '          (y === 1) ? stickerMats.top : blackMat, (y === -1) ? stickerMats.bottom : blackMat,',
+    '          (z === 1) ? stickerMats.front : blackMat, (z === -1) ? stickerMats.back : blackMat',
+    '        ];',
+    '        const geometry = new THREE.BoxGeometry(size, size, size);',
+    '        const cube = new THREE.Mesh(geometry, holeMaterials);',
+    '        cube.position.set(x * gap, y * gap, z * gap); cube.userData = { initialX: x, initialY: y, initialZ: z };',
+    '        cubeGroup.add(cube); cubes.push(cube);',
+    '      }',
+    '    }',
+    '  }',
+    '  const raycaster = new THREE.Raycaster(); let isTransitioning = false;',
+    '  let pointerStartX = 0, pointerStartY = 0; let intersectedCube = null, intersectedFaceNormal = null;',
+    '  window.addEventListener("pointerdown", (e) => {',
+    '    if (isTransitioning) return;',
+    '    const mouse = new THREE.Vector2((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);',
+    '    raycaster.setFromCamera(mouse, camera); const intersects = raycaster.intersectObjects(cubes);',
+    '    if (intersects.length > 0) {',
+    '      controls.enabled = false; intersectedCube = intersects.object;',
+    '      intersectedFaceNormal = intersects.face.normal.clone().applyQuaternion(intersectedCube.quaternion);',
+    '      pointerStartX = e.clientX; pointerStartY = e.clientY;',
+    '    } else { controls.enabled = true; }',
+    '  });',
+    '  window.addEventListener("pointerup", (e) => {',
+    '    if (!controls.enabled && intersectedCube && !isTransitioning) {',
+    '      const deltaX = e.clientX - pointerStartX; const deltaY = e.clientY - pointerStartY;',
+    '      if (Math.sqrt(deltaX * deltaX + deltaY * deltaY) > 25) { processSwipeTwist(deltaX, deltaY); }',
+    '    }',
+    '    controls.enabled = true; intersectedCube = null;',
+    '  });',
+    '  function processSwipeTwist(deltaX, deltaY) {',
+    '    const swipeDirScreen = new THREE.Vector3(deltaX, -deltaY, 0).normalize();',
+    '    const cameraXWorld = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);',
+    '    const cameraYWorld = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);',
+    '    const swipeDirWorld = new THREE.Vector3().addScaledVector(cameraXWorld, swipeDirScreen.x).addScaledVector(cameraYWorld, swipeDirScreen.y).projectOnPlane(intersectedFaceNormal).normalize();',
+    '    const tangentTwistDir = new THREE.Vector3().crossVectors(intersectedFaceNormal, swipeDirWorld).normalize();',
+    '    let bestAxis = new THREE.Vector3(1, 0, 0); let maxDot = 0;',
+    '    const globalAxes = [new THREE.Vector3(1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,1)];',
+    '    globalAxes.forEach(axis => {',
+    '      const dot = Math.abs(tangentTwistDir.dot(axis));',
+    '      if (dot > maxDot) { maxDot = dot; bestAxis = axis.clone().multiplyScalar(Math.sign(tangentTwistDir.dot(axis))); }',
+    '    });',
+    '    let targetComponent = "";',
+    '    if (bestAxis.x !== 0) targetComponent = "x"; if (bestAxis.y !== 0) targetComponent = "y"; if (bestAxis.z !== 0) targetComponent = "z";',
+    '    if (targetComponent) {',
+    '      const targetCoord = intersectedCube.position[targetComponent];',
+    '      const sliceCubes = cubes.filter(c => Math.abs(c.position[targetComponent] - targetCoord) < 0.1);',
+    '      const angle = (bestAxis.x + bestAxis.y + bestAxis.z) * (Math.PI / 2);',
+'      rotateSlice(sliceCubes, new THREE.Vector3(bestAxis.x !== 0 ? 1:0, bestAxis.y !== 0 ? 1:0, bestAxis.z !== 0 ? 1:0), angle);',
+'    }',
+'  }',
+'  function rotateSlice(sliceCubes, axis, angle, isScrambling = false) {',
+'    isTransitioning = true; const pivot = new THREE.Group(); scene.add(pivot); sliceCubes.forEach(c => pivot.attach(c));',
+'    const duration = isScrambling ? 40 : 250; const start = performance.now();',
+'    const startQuat = pivot.quaternion.clone(); const targetQuat = new THREE.Quaternion().setFromAxisAngle(axis, angle).multiply(startQuat);',
+'    function step() {',
+'      const progress = Math.min((performance.now() - start) / duration, 1);',
+'      pivot.quaternion.slerpQuaternions(startQuat, targetQuat, isScrambling ? progress : progress * (2 - progress));',
+'      if (progress < 1) { requestAnimationFrame(step); } else {',
+'        sliceCubes.forEach(c => { cubeGroup.attach(c); c.position.x = Math.round(c.position.x); c.position.y = Math.round(c.position.y); c.position.z = Math.round(c.position.z); });',
+'        scene.remove(pivot); isTransitioning = false;',
+'        if (!isScrambling && hasScrambled) { checkWinState(); }',
+'      }',
+'    }',
+'    step();',
+'  }',
+'  document.getElementById("scramble-btn").addEventListener("click", async () => {',
+'    if (isTransitioning) return; hasScrambled = true; timerActive = false; timerDisplay.textContent = "00:00.0";',
+'    const movesCount = 15; const componentKeys = ["x", "y", "z"]; const coordinateOptions = [-1, 0, 1];',
+'    for (let i = 0; i < movesCount; i++) {',
+'      const comp = componentKeys[Math.floor(Math.random() * 3)]; const coord = coordinateOptions[Math.floor(Math.random() * 3)];',
+'      const slice = cubes.filter(c => Math.abs(c.position[comp] - coord) < 0.1);',
+'      const axis = new THREE.Vector3(comp === "x" ? 1:0, comp === "y" ? 1:0, comp === "z" ? 1:0);',
+'      const angle = (Math.random() > 0.5 ? 1 : -1) * (Math.PI / 2);',
+'      rotateSlice(slice, axis, angle, true); await new Promise(r => setTimeout(r, 50));',
+'    }',
+'    startTime = Date.now(); timerActive = true; updateTimer();',
+'  });',
+'  function checkWinState() {',
+'    let isSolved = true;',
+'    const referenceDirections = [{ field: "x", val: 1 }, { field: "x", val: -1 }, { field: "y", val: 1 }, { field: "y", val: -1 }, { field: "z", val: 1 }, { field: "z", val: -1 }];',
+'    for (let ref of referenceDirections) {',
+'      const faceSubset = cubes.filter(c => Math.abs(c.position[ref.field] - ref.val) < 0.1);',
+'      if (faceSubset.length === 0) continue;',
+'      const anchorCube = faceSubset;',
+'      const targetLocalPos = new THREE.Vector3(anchorCube.userData.initialX, anchorCube.userData.initialY, anchorCube.userData.initialZ);',
+'      const mappedGlobalDir = targetLocalPos.clone().applyQuaternion(anchorCube.quaternion);',
+'      for (let companion of faceSubset) {',
+'        const compLocal = new THREE.Vector3(companion.userData.initialX, companion.userData.initialY, companion.userData.initialZ);',
+'        const compGlobalDir = compLocal.clone().applyQuaternion(companion.quaternion);',
+'        if (compGlobalDir.distanceTo(mappedGlobalDir) > 0.1) { isSolved = false; break; }',
+'      }',
+'      if (!isSolved) break;',
+'    }',
+'    if (isSolved) {',
+'      timerActive = false; document.getElementById("final-time").textContent = Your time: ${timerDisplay.textContent};',
+'      document.getElementById("win-screen").classList.add("show");',
+'    }',
+'  }',
+'  document.getElementById("restart-btn").addEventListener("click", () => {',
+'    document.getElementById("win-screen").classList.remove("show"); hasScrambled = false; timerDisplay.textContent = "00:00.0";',
+'  });',
+'  window.addEventListener("resize", () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });',
+'  function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }',
+'  animate();',
+'',
+'',
+''
+]
