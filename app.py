@@ -139,7 +139,6 @@ html_lines = [
     '      const targetCoord = intersectedCube.position[targetComponent];',
     '      const sliceCubes = cubes.filter(c => Math.abs(c.position[targetComponent] - targetCoord) < 0.1);',
     '      const angle = (bestAxis.x + bestAxis.y + bestAxis.z) * (Math.PI / 2);',
-Use code with caution.
 '      rotateSlice(sliceCubes, new THREE.Vector3(bestAxis.x !== 0 ? 1:0, bestAxis.y !== 0 ? 1:0, bestAxis.z !== 0 ? 1:0), angle);',
 '    }',
 '  }',
