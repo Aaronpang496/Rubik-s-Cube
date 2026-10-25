@@ -1,42 +1,432 @@
-from pathlib import Path
-
 import streamlit as st
 import streamlit.components.v1 as components
 
-st.set_page_config(
-    page_title="Island Flight",
-    page_icon="✈️",
-    layout="wide",
-)
+# 1. Force the Streamlit layout to wide mode
+st.set_page_config(page_title="3D Rubik's Cube Mobile", layout="wide")
 
-st.markdown(
-    """
-    <style>
-      .block-container {
-        padding-top: 0.5rem;
-        padding-bottom: 0;
+# 2. Complete decoupled production HTML string
+cube_html_code = """
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>3D Rubik's Cube Mobile</title>
+<style>
+  * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
+  body {
+    margin: 0;
+    overflow: hidden;
+    background-color: #0f172a;
+    touch-action: none;
+    font-family: system-ui, sans-serif;
+    height: 100vh;
+    width: 100vw;
+  }
+  canvas { display: block; width: 100%; height: 100%; }
+  
+  #ui {
+    position: absolute;
+    top: 20px;
+    left: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    pointer-events: none;
+    color: white;
+    z-index: 10;
+  }
+  #timer {
+    font-size: clamp(32px, 8vw, 48px);
+    font-weight: bold;
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 4px 10px rgba(0,0,0,0.8);
+    color: #facc15;
+  }
+  #instructions {
+    margin-top: 5px;
+    font-size: clamp(11px, 3.5vw, 14px);
+    color: #94a3b8;
+    text-align: center;
+    padding: 0 10px;
+  }
+  
+  #controls-container {
+    position: absolute;
+    bottom: 30px;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    gap: 15px;
+    z-index: 10;
+  }
+  button {
+    pointer-events: auto;
+    background: #2563eb;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    font-size: 16px;
+    font-weight: bold;
+    border-radius: 8px;
+    box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3);
+  }
+  button:active {
+    background: #1d4ed8;
+  }
+
+  #win-screen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(15, 23, 42, 0.85);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    color: #4ade80;
+    font-size: 32px;
+    font-weight: bold;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.5s ease;
+    z-index: 20;
+    text-align: center;
+  }
+  #win-screen.show {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  #win-screen span {
+    color: white;
+    font-size: 20px;
+    margin-top: 10px;
+  }
+</style>
+
+<!-- Load standard scripts directly to bypass Streamlit sandbox importmap blocking -->
+<script src="https://jsdelivr.net"></script>
+<script src="https://jsdelivr.net"></script>
+
+</head>
+<body>
+
+<div id="ui">
+  <div id="timer">00:00.0</div>
+  <div id="instructions">Swipe background to turn cube • Drag a sticker face to twist slice</div>
+</div>
+
+<div id="controls-container">
+  <button id="scramble-btn">Scramble</button>
+</div>
+
+<div id="win-screen">
+  🎉 CUBE SOLVED! 🎉
+  <span id="final-time">Your time: --:--.-</span>
+  <button id="restart-btn" style="margin-top: 20px; background: #4ade80; color: #0f172a;">Play Again</button>
+</div>
+
+<script>
+  // --- TIMER LOGIC ---
+  const timerDisplay = document.getElementById('timer');
+  let startTime = Date.now();
+  let timerActive = false;
+  let hasScrambled = false;
+
+  function updateTimer() {
+    if (!timerActive) return;
+    const elapsed = Date.now() - startTime;
+    const minutes = Math.floor(elapsed / 60000);
+    const seconds = Math.floor((elapsed % 60000) / 1000);
+    const tenths = Math.floor((elapsed % 1000) / 100);
+    
+    timerDisplay.textContent = 
+      `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${tenths}`;
+      
+    requestAnimationFrame(updateTimer);
+  }
+
+  // --- SETUP SCENE, CAMERA, RENDERER ---
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+  camera.position.set(4, 4, 6);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  document.body.appendChild(renderer.domElement);
+
+  // --- ADD CONTROLS ---
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.05;
+  controls.enableZoom = true;
+  controls.enablePan = false;
+
+  // --- ADD LIGHTS ---
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+  scene.add(ambientLight);
+  
+  const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+  dirLight.position.set(10, 10, 10);
+  scene.add(dirLight);
+
+  const dirLight2 = new THREE.DirectionalLight(0xffffff, 0.3);
+  dirLight2.position.set(-10, -10, -10);
+  scene.add(dirLight2);
+
+  // --- BUILD THE RUBIK'S CUBE ---
+  const size = 0.92; 
+  const gap = 1.0;     
+  
+  const colors = {
+    right: 0xb91c1c,
+    left: 0xea580c,
+    top: 0xf8fafc,
+    bottom: 0xeab308,
+    front: 0x16a34a,
+    back: 0x2563eb
+  };
+
+  const cubeGroup = new THREE.Group();
+  scene.add(cubeGroup);
+
+  const cubes = [];
+
+  function createStickerTexture(colorHex) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 256;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#111111';
+    ctx.fillRect(0, 0, 256, 256);
+    ctx.fillStyle = colorHex;
+    if(ctx.roundRect) {
+      ctx.roundRect(16, 16, 224, 224, 32);
+    } else {
+      ctx.rect(16, 16, 224, 224);
+    }
+    ctx.fill();
+    return new THREE.CanvasTexture(canvas);
+  }
+
+  const blackMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.5 });
+  const stickerMats = {
+    right: new THREE.MeshStandardMaterial({ map: createStickerTexture('#b91c1c'), roughness: 0.2 }),
+    left: new THREE.MeshStandardMaterial({ map: createStickerTexture('#ea580c'), roughness: 0.2 }),
+    top: new THREE.MeshStandardMaterial({ map: createStickerTexture('#f8fafc'), roughness: 0.2 }),
+    bottom: new THREE.MeshStandardMaterial({ map: createStickerTexture('#eab308'), roughness: 0.2 }),
+    front: new THREE.MeshStandardMaterial({ map: createStickerTexture('#16a34a'), roughness: 0.2 }),
+    back: new THREE.MeshStandardMaterial({ map: createStickerTexture('#2563eb'), roughness: 0.2 })
+  };
+
+  for (let x = -1; x <= 1; x++) {
+    for (let y = -1; y <= 1; y++) {
+      for (let z = -1; z <= 1; z++) {
+        if (x === 0 && y === 0 && z === 0) continue;
+        
+        const holeMaterials = [
+          (x === 1) ? stickerMats.right : blackMat,
+          (x === -1) ? stickerMats.left : blackMat,
+          (y === 1) ? stickerMats.top : blackMat,
+          (y === -1) ? stickerMats.bottom : blackMat,
+          (z === 1) ? stickerMats.front : blackMat,
+          (z === -1) ? stickerMats.back : blackMat
+        ];
+
+        const geometry = new THREE.BoxGeometry(size, size, size);
+        const cube = new THREE.Mesh(geometry, holeMaterials);
+        
+        cube.position.set(x * gap, y * gap, z * gap);
+        cube.userData = { initialX: x, initialY: y, initialZ: z };
+        
+        cubeGroup.add(cube);
+        cubes.push(cube);
       }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+    }
+  }
 
-game_path = Path(__file__).resolve().with_name("game.html")
+  // --- MOBILE SWIPE MECHANICS ENGINE ---
+  const raycaster = new THREE.Raycaster();
+  let isTransitioning = false;
 
-try:
-    game_html = game_path.read_text(encoding="utf-8")
-except FileNotFoundError:
-    st.error(
-        "game.html was not found. Save it in the same folder as app.py. "
-        "The filename must be game.html, not game.hmtl."
-    )
-    st.stop()
-except (OSError, UnicodeError) as error:
-    st.error(f"Could not read game.html: {error}")
-    st.stop()
+  let pointerStartX = 0, pointerStartY = 0;
+  let intersectedCube = null;
+  let intersectedFaceNormal = null;
 
-components.html(
-    game_html,
-    height=1100,
-    scrolling=True,
-)
+  window.addEventListener('pointerdown', (e) => {
+    if (isTransitioning) return;
+
+    const mouse = new THREE.Vector2(
+      (e.clientX / window.innerWidth) * 2 - 1,
+      -(e.clientY / window.innerHeight) * 2 + 1
+    );
+
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(cubes);
+
+    if (intersects.length > 0) {
+      controls.enabled = false;
+      intersectedCube = intersects[0].object;
+      intersectedFaceNormal = intersects[0].face.normal.clone().applyQuaternion(intersectedCube.quaternion);
+      pointerStartX = e.clientX;
+      pointerStartY = e.clientY;
+    } else {
+      controls.enabled = true;
+    }
+  });
+
+  window.addEventListener('pointerup', (e) => {
+    if (!controls.enabled && intersectedCube && !isTransitioning) {
+      const deltaX = e.clientX - pointerStartX;
+      const deltaY = e.clientY - pointerStartY;
+      const swipeDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+      if (swipeDistance > 25) { 
+        processSwipeTwist(deltaX, deltaY);
+      }
+    }
+    controls.enabled = true;
+    intersectedCube = null;
+  });
+
+  function processSwipeTwist(deltaX, deltaY) {
+    const swipeDirScreen = new THREE.Vector3(deltaX, -deltaY, 0).normalize();
+    const cameraXWorld = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+    const cameraYWorld = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+    const swipeDirWorld = new THREE.Vector3()
+      .addScaledVector(cameraXWorld, swipeDirScreen.x)
+      .addScaledVector(cameraYWorld, swipeDirScreen.y)
+      .projectOnPlane(intersectedFaceNormal)
+      .normalize();
+
+    const tangentTwistDir = new THREE.Vector3().crossVectors(intersectedFaceNormal, swipeDirWorld).normalize();
+
+    let bestAxis = new THREE.Vector3(1, 0, 0);
+    let maxDot = 0;
+    const globalAxes = [new THREE.Vector3(1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,1)];
+    
+    globalAxes.forEach(axis => {
+      const dot = Math.abs(tangentTwistDir.dot(axis));
+      if (dot > maxDot) {
+        maxDot = dot;
+        bestAxis = axis.clone().multiplyScalar(Math.sign(tangentTwistDir.dot(axis)));
+      }
+    });
+
+    let targetComponent = '';
+    if (bestAxis.x !== 0) targetComponent = 'x';
+    if (bestAxis.y !== 0) targetComponent = 'y';
+    if (bestAxis.z !== 0) targetComponent = 'z';
+
+    if (targetComponent) {
+      const targetCoord = intersectedCube.position[targetComponent];
+      const sliceCubes = cubes.filter(c => Math.abs(c.position[targetComponent] - targetCoord) < 0.1);
+      const angle = (bestAxis.x + bestAxis.y + bestAxis.z) * (Math.PI / 2);
+Use code with caution.
+rotateSlice(sliceCubes, new THREE.Vector3(bestAxis.x !== 0 ? 1:0, bestAxis.y !== 0 ? 1:0, bestAxis.z !== 0 ? 1:0), angle);
+}
+}
+// --- TRANSITION CONTROLLER ---
+function rotateSlice(sliceCubes, axis, angle, isScrambling = false) {
+isTransitioning = true;
+const pivot = new THREE.Group();
+scene.add(pivot);
+sliceCubes.forEach(c => pivot.attach(c));
+const duration = isScrambling ? 40 : 250;
+const start = performance.now();
+const startQuat = pivot.quaternion.clone();
+const targetQuat = new THREE.Quaternion().setFromAxisAngle(axis, angle).multiply(startQuat);
+function step() {
+const progress = Math.min((performance.now() - start) / duration, 1);
+pivot.quaternion.slerpQuaternions(startQuat, targetQuat, isScrambling ? progress : progress * (2 - progress));
+if (progress < 1) {
+requestAnimationFrame(step);
+} else {
+sliceCubes.forEach(c => {
+cubeGroup.attach(c);
+c.position.x = Math.round(c.position.x);
+c.position.y = Math.round(c.position.y);
+c.position.z = Math.round(c.position.z);
+});
+scene.remove(pivot);
+isTransitioning = false;
+if (!isScrambling && hasScrambled) {
+checkWinState();
+}
+}
+}
+step();
+}
+// --- SCRAMBLE LOGIC ENGINE ---
+document.getElementById('scramble-btn').addEventListener('click', async () => {
+if (isTransitioning) return;
+hasScrambled = true;
+timerActive = false;
+timerDisplay.textContent = "00:00.0";
+const movesCount = 15;
+const componentKeys = ['x', 'y', 'z'];
+const coordinateOptions = [-1, 0, 1];
+for (let i = 0; i < movesCount; i++) {
+const comp = componentKeys[Math.floor(Math.random() * 3)];
+const coord = coordinateOptions[Math.floor(Math.random() * 3)];
+const slice = cubes.filter(c => Math.abs(c.position[comp] - coord) < 0.1);
+const axis = new THREE.Vector3(comp === 'x' ? 1:0, comp === 'y' ? 1:0, comp === 'z' ? 1:0);
+const angle = (Math.random() > 0.5 ? 1 : -1) * (Math.PI / 2);
+rotateSlice(slice, axis, angle, true);
+await new Promise(r => setTimeout(r, 50));
+}
+startTime = Date.now();
+timerActive = true;
+updateTimer();
+});
+// --- WIN-STATE EVALUATION TRIGGER ---
+function checkWinState() {
+let isSolved = true;
+const referenceDirections = [
+{ field: 'x', val: 1 },  { field: 'x', val: -1 },
+{ field: 'y', val: 1 },  { field: 'y', val: -1 },
+{ field: 'z', val: 1 },  { field: 'z', val: -1 }
+];
+for (let ref of referenceDirections) {
+const faceSubset = cubes.filter(c => Math.abs(c.position[ref.field] - ref.val) < 0.1);
+if (faceSubset.length === 0) continue;
+const anchorCube = faceSubset[0];
+const targetLocalPos = new THREE.Vector3(anchorCube.userData.initialX, anchorCube.userData.initialY, anchorCube.userData.initialZ);
+const mappedGlobalDir = targetLocalPos.clone().applyQuaternion(anchorCube.quaternion);
+for (let companion of faceSubset) {
+const compLocal = new THREE.Vector3(companion.userData.initialX, companion.userData.initialY, companion.userData.initialZ);
+const compGlobalDir = compLocal.clone().applyQuaternion(companion.quaternion);
+if (compGlobalDir.distanceTo(mappedGlobalDir) > 0.1) {
+isSolved = false;
+break;
+}
+}
+if (!isSolved) break;
+}
+if (isSolved) {
+timerActive = false;
+document.getElementById('final-time').textContent = Your time: ${timerDisplay.textContent};
+document.getElementById('win-screen').classList.add('show');
+}
+}
+document.getElementById('restart-btn').addEventListener('click', () => {
+document.getElementById('win-screen').classList.remove('show');
+hasScrambled = false;
+timerDisplay.textContent = "00:00.0";
+});
+// --- RESIZE HANDLING ---
+window.addEventListener('resize', () => {
+camera.aspect = window.innerWidth / window.innerHeight;
+camera.updateProjectionMatrix();
+renderer.setSize(window.innerWidth, window.innerHeight);
+});
+// --- ANIMATION LOOP ---
+function animate() {
+requestAnimationFrame(animate);
+controls.update();
+renderer.render(scene, camera);
+}
+animate();
