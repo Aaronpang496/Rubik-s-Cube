@@ -1,3 +1,11 @@
+import streamlit as st
+import streamlit.components.v1 as components
+
+# Set up Streamlit page layout to use wide screen and hide margins
+st.set_page_config(page_title="3D Rubik's Cube Mobile", layout="wide")
+
+# This string contains your entire Three.js application layer
+cube_html_code = """
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -12,8 +20,10 @@
     background-color: #0f172a;
     touch-action: none;
     font-family: system-ui, sans-serif;
+    height: 100vh;
+    width: 100vw;
   }
-  canvas { display: block; }
+  canvas { display: block; width: 100%; height: 100%; }
   
   /* UI Overlay */
   #ui {
@@ -63,7 +73,6 @@
     font-weight: bold;
     border-radius: 8px;
     box-shadow: 0 4px 6px -1px rgba(0,0,0,0.3);
-    active-transform: scale(0.95);
   }
   button:active {
     background: #1d4ed8;
@@ -238,7 +247,6 @@
         const cube = new THREE.Mesh(geometry, holeMaterials);
         
         cube.position.set(x * gap, y * gap, z * gap);
-        // Track unique IDs to evaluate clean alignment mapping states on winning conditions
         cube.userData = { initialX: x, initialY: y, initialZ: z };
         
         cubeGroup.add(cube);
@@ -267,14 +275,12 @@
     const intersects = raycaster.intersectObjects(cubes);
 
     if (intersects.length > 0) {
-      // Touch hit a cube: step away from view rotation and track gesture parameters
       controls.enabled = false;
       intersectedCube = intersects[0].object;
       intersectedFaceNormal = intersects[0].face.normal.clone().applyQuaternion(intersectedCube.quaternion);
       pointerStartX = e.clientX;
       pointerStartY = e.clientY;
     } else {
-      // Background touch: safely fallback to camera viewport navigation
       controls.enabled = true;
     }
   });
@@ -285,7 +291,7 @@
       const deltaY = e.clientY - pointerStartY;
       const swipeDistance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
 
-      if (swipeDistance > 25) { // Minimum activation distance threshold
+      if (swipeDistance > 25) { 
         processSwipeTwist(deltaX, deltaY);
       }
     }
@@ -294,14 +300,7 @@
   });
 
   function processSwipeTwist(deltaX, deltaY) {
-    // 1. Project swipe screen metrics into relative 3D space directions
     const swipeDirScreen = new THREE.Vector3(deltaX, -deltaY, 0).normalize();
-    
-    // Determine plane projection angles relative to camera viewport structure
-    const vectorProjX = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion).projectOnPlane(intersectedFaceNormal).normalize();
-    const vectorProjY = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion).projectOnPlane(intersectedFaceNormal).normalize();
-
-    // Map screen orientation vectors into world coordinates
     const cameraXWorld = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
     const cameraYWorld = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
     const swipeDirWorld = new THREE.Vector3()
@@ -310,30 +309,29 @@
       .projectOnPlane(intersectedFaceNormal)
       .normalize();
 
-    // 2. Identify the target twisting axis by using cross products
     const tangentTwistDir = new THREE.Vector3().crossVectors(intersectedFaceNormal, swipeDirWorld).normalize();
 
-    // Match calculated world directions to specific discrete axes (X, Y, or Z)
     let bestAxis = new THREE.Vector3(1, 0, 0);
     let maxDot = 0;
+    const globalAxes = [new THREE.Vector3(1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,1)];
+    
+    globalAxes.forEach(axis => {
+      const dot = Math.abs(tangentTwistDir.dot(axis));
+      if (dot > maxDot) {
+        maxDot = dot;
+        bestAxis = axis.clone().multiplyScalar(Math.sign(tangentTwistDir.dot(axis)));
+      }
+    });
+
+    let targetComponent = '';
+    if (bestAxis.x !== 0) targetComponent = 'x';
+    if (bestAxis.y !== 0) targetComponent = 'y';
+    if (bestAxis.z !== 0) targetComponent = 'z';
+
+    if (targetComponent) {
+      const targetCoord = intersectedCube.position[targetComponent];
 Use code with caution.
-const globalAxes = [new THREE.Vector3(1,0,0), new THREE.Vector3(0,1,0), new THREE.Vector3(0,0,1)];
-globalAxes.forEach(axis => {
-const dot = Math.abs(tangentTwistDir.dot(axis));
-if (dot > maxDot) {
-maxDot = dot;
-bestAxis = axis.clone().multiplyScalar(Math.sign(tangentTwistDir.dot(axis)));
-}
-});
-// 3. Resolve components tracking
-let targetComponent = '';
-if (bestAxis.x !== 0) targetComponent = 'x';
-if (bestAxis.y !== 0) targetComponent = 'y';
-if (bestAxis.z !== 0) targetComponent = 'z';
-if (targetComponent) {
-const targetCoord = intersectedCube.position[targetComponent];
 const sliceCubes = cubes.filter(c => Math.abs(c.position[targetComponent] - targetCoord) < 0.1);
-// Determine final direction values
 const angle = (bestAxis.x + bestAxis.y + bestAxis.z) * (Math.PI / 2);
 rotateSlice(sliceCubes, new THREE.Vector3(bestAxis.x !== 0 ? 1:0, bestAxis.y !== 0 ? 1:0, bestAxis.z !== 0 ? 1:0), angle);
 }
@@ -344,7 +342,7 @@ isTransitioning = true;
 const pivot = new THREE.Group();
 scene.add(pivot);
 sliceCubes.forEach(c => pivot.attach(c));
-const duration = isScrambling ? 50 : 250; // Quicker speed values for immediate scrambles
+const duration = isScrambling ? 40 : 250;
 const start = performance.now();
 const startQuat = pivot.quaternion.clone();
 const targetQuat = new THREE.Quaternion().setFromAxisAngle(axis, angle).multiply(startQuat);
@@ -385,8 +383,7 @@ const slice = cubes.filter(c => Math.abs(c.position[comp] - coord) < 0.1);
 const axis = new THREE.Vector3(comp === 'x' ? 1:0, comp === 'y' ? 1:0, comp === 'z' ? 1:0);
 const angle = (Math.random() > 0.5 ? 1 : -1) * (Math.PI / 2);
 rotateSlice(slice, axis, angle, true);
-// Wait for loop thread completion block safely
-await new Promise(r => setTimeout(r, 60));
+await new Promise(r => setTimeout(r, 50));
 }
 startTime = Date.now();
 timerActive = true;
@@ -395,20 +392,16 @@ updateTimer();
 // --- WIN-STATE EVALUATION TRIGGER ---
 function checkWinState() {
 let isSolved = true;
-// Track state vector arrays for all six directions to see if side face alignment stays pristine
 const referenceDirections = [
 { field: 'x', val: 1 },  { field: 'x', val: -1 },
 { field: 'y', val: 1 },  { field: 'y', val: -1 },
 { field: 'z', val: 1 },  { field: 'z', val: -1 }
 ];
 for (let ref of referenceDirections) {
-// Find one structural benchmark target piece on the face array
 const faceSubset = cubes.filter(c => Math.abs(c.position[ref.field] - ref.val) < 0.1);
 const anchorCube = faceSubset[0];
-// Transform its baseline reference into global coordinate structure matrices
 const targetLocalPos = new THREE.Vector3(anchorCube.userData.initialX, anchorCube.userData.initialY, anchorCube.userData.initialZ);
 const mappedGlobalDir = targetLocalPos.clone().applyQuaternion(anchorCube.quaternion);
-// Verify that every companion child tracking component on that face layer mirrors the identical matrix index rotation
 for (let companion of faceSubset) {
 const compLocal = new THREE.Vector3(companion.userData.initialX, companion.userData.initialY, companion.userData.initialZ);
 const compGlobalDir = compLocal.clone().applyQuaternion(companion.quaternion);
@@ -425,7 +418,6 @@ document.getElementById('final-time').textContent = Your time: ${timerDisplay.te
 document.getElementById('win-screen').classList.add('show');
 }
 }
-// RESTART BUTTON LOGIC
 document.getElementById('restart-btn').addEventListener('click', () => {
 document.getElementById('win-screen').classList.remove('show');
 hasScrambled = false;
