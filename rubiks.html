@@ -5,16 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>3D Rubik's Cube</title>
 <style>
-  * { box-sizing: border-box; user-select: none; -webkit-user-select: none; }
-  body {
+  html, body {
     margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
     overflow: hidden;
     background-color: #0f172a;
     touch-action: none;
     font-family: system-ui, sans-serif;
+    user-select: none;
+    -webkit-user-select: none;
   }
-  canvas { display: block; }
-  
+  * { box-sizing: border-box; }
+  canvas { display: block; width: 100%; height: 100%; }
+
   #ui {
     position: absolute;
     top: 20px;
@@ -25,6 +30,7 @@
     align-items: center;
     pointer-events: none;
     color: white;
+    z-index: 10;
   }
   #timer {
     font-size: 56px;
@@ -35,8 +41,7 @@
     transition: color 0.3s;
   }
   #timer.running { color: #22c55e; }
-  
-  /* Start Button */
+
   #start-btn {
     margin-top: 15px;
     padding: 12px 30px;
@@ -47,12 +52,23 @@
     border: none;
     border-radius: 8px;
     cursor: pointer;
-    pointer-events: auto; /* Allow clicking */
+    pointer-events: auto;
     box-shadow: 0 4px 10px rgba(0,0,0,0.5);
     transition: 0.2s;
   }
   #start-btn:active { background: #1d4ed8; transform: scale(0.95); }
   #start-btn.hidden { display: none; }
+
+  #instruction {
+    margin-top: 10px;
+    font-size: 14px;
+    color: #94a3b8;
+    background: rgba(0,0,0,0.6);
+    padding: 6px 16px;
+    border-radius: 20px;
+    pointer-events: none;
+    backdrop-filter: blur(4px);
+  }
 </style>
 
 <script type="importmap">
@@ -69,6 +85,7 @@
 <div id="ui">
   <div id="timer">0:00.0</div>
   <button id="start-btn">START TIMER</button>
+  <div id="instruction">Swipe on a face to twist</div>
 </div>
 
 <script type="module">
@@ -80,20 +97,17 @@
   const startBtn = document.getElementById('start-btn');
   let startTime = null;
   let isRunning = false;
-  let animationFrameId;
+  let timerAnimationFrame;
 
   function updateTimer() {
     if (!isRunning) return;
-    
     const elapsed = Date.now() - startTime;
     const minutes = Math.floor(elapsed / 60000);
     const seconds = Math.floor((elapsed % 60000) / 1000);
     const tenths = Math.floor((elapsed % 1000) / 100);
-    
-    timerDisplay.textContent = 
+    timerDisplay.textContent =
       `${minutes}:${String(seconds).padStart(2, '0')}.${tenths}`;
-      
-    animationFrameId = requestAnimationFrame(updateTimer);
+    timerAnimationFrame = requestAnimationFrame(updateTimer);
   }
 
   startBtn.addEventListener('click', () => {
@@ -106,30 +120,38 @@
   });
 
   // --- SETUP THREE.JS ---
+  const container = document.body;
+  const width = container.clientWidth || window.innerWidth;
+  const height = container.clientHeight || window.innerHeight;
+
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+  const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
   camera.position.set(4, 4, 6);
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  document.body.appendChild(renderer.domElement);
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setSize(width, height, false);
+  renderer.domElement.style.width = '100%';
+  renderer.domElement.style.height = '100%';
+  container.appendChild(renderer.domElement);
 
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.05;
   controls.enableZoom = true;
   controls.enablePan = false;
+  controls.rotateSpeed = 0.8;
 
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
   scene.add(ambientLight);
-  
+
   const dirLight = new THREE.DirectionalLight(0xffffff, 1);
   dirLight.position.set(10, 10, 10);
   scene.add(dirLight);
 
   // --- CUBE BUILDER ---
-  const size = 0.95; 
-  const gap = 1;     
+  const size = 0.95;
+  const gap = 1;
   const colors = {
     right: 0xff0000, left: 0xff8800, top: 0xffffff,
     bottom: 0xffdd00, front: 0x00ff00, back: 0x0000ff
@@ -137,6 +159,8 @@
 
   const cubeGroup = new THREE.Group();
   scene.add(cubeGroup);
+
+  const cubes = [];
 
   for (let x = -1; x <= 1; x++) {
     for (let y = -1; y <= 1; y++) {
@@ -153,26 +177,281 @@
         const geometry = new THREE.BoxGeometry(size, size, size);
         const cube = new THREE.Mesh(geometry, materials);
         cube.position.set(x * gap, y * gap, z * gap);
+        cube.userData.logicalPos = new THREE.Vector3(x, y, z);
         cubeGroup.add(cube);
+        cubes.push(cube);
       }
     }
   }
 
-  // --- RESIZE ---
-  window.addEventListener('resize', () => {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-  });
+  // --- RAYCASTING & SWIPE DETECTION ---
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
 
-  // --- RENDER LOOP ---
-  function animate() {
-    requestAnimationFrame(animate);
-    controls.update(); 
-    renderer.render(scene, camera);
+  let pointerDown = false;
+  let pointerDownPos = new THREE.Vector2();
+  let pointerDownTime = 0;
+  let activeFace = null;
+  let isAnimating = false;
+  let pointerId = null;
+
+  const swipeThreshold = 15;
+  const swipeTimeThreshold = 300;
+
+  // Animation state
+  let animationAxis = null;
+  let animationAngle = 0;
+  let animationStartTime = 0;
+  let animationDuration = 250;
+  let animationCubes = [];
+  let animationOriginalPositions = [];
+
+  // --- HELPERS ---
+  function getFaceNormal(face, object) {
+    const normalMatrix = new THREE.Matrix3().getNormalMatrix(object.matrixWorld);
+    return face.normal.clone().applyMatrix3(normalMatrix).normalize();
   }
 
-  animate();
+  function getCubesOnFace(normal) {
+    const absX = Math.abs(normal.x);
+    const absY = Math.abs(normal.y);
+    const absZ = Math.abs(normal.z);
+
+    let axis, layerValue;
+    if (absX >= absY && absX >= absZ) {
+      axis = 'x'; layerValue = Math.sign(normal.x);
+    } else if (absY >= absX && absY >= absZ) {
+      axis = 'y'; layerValue = Math.sign(normal.y);
+    } else {
+      axis = 'z'; layerValue = Math.sign(normal.z);
+    }
+
+    const faceCubes = cubes.filter(cube => {
+      const lp = cube.userData.logicalPos;
+      if (axis === 'x') return Math.abs(lp.x - layerValue) < 0.1;
+      if (axis === 'y') return Math.abs(lp.y - layerValue) < 0.1;
+      if (axis === 'z') return Math.abs(lp.z - layerValue) < 0.1;
+      return false;
+    });
+
+    return { axis, layerValue, faceCubes, normal };
+  }
+
+  function getSwipeDirection(start, end) {
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    if (Math.abs(dx) > Math.abs(dy)) return dx > 0 ? 'right' : 'left';
+    return dy > 0 ? 'down' : 'up';
+  }
+
+  function getRotationFromSwipe(faceInfo, swipeDir) {
+    const { normal } = faceInfo;
+    const cameraRight = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+    const cameraUp = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+
+    const n = normal.clone().normalize();
+    const screenRight = cameraRight.clone()
+      .sub(n.clone().multiplyScalar(cameraRight.dot(n))).normalize();
+    const screenUp = cameraUp.clone()
+      .sub(n.clone().multiplyScalar(cameraUp.dot(n))).normalize();
+
+    let swipe3D;
+    switch (swipeDir) {
+      case 'right': swipe3D = screenRight; break;
+      case 'left': swipe3D = screenRight.clone().negate(); break;
+      case 'up': swipe3D = screenUp; break;
+      case 'down': swipe3D = screenUp.clone().negate(); break;
+      default: swipe3D = screenRight;
+    }
+
+    const rotAxis = new THREE.Vector3().crossVectors(n, swipe3D).normalize();
+
+    const absX = Math.abs(rotAxis.x);
+    const absY = Math.abs(rotAxis.y);
+    const absZ = Math.abs(rotAxis.z);
+
+    let principalAxis;
+    if (absX >= absY && absX >= absZ) {
+      principalAxis = new THREE.Vector3(Math.sign(rotAxis.x), 0, 0);
+    } else if (absY >= absX && absY >= absZ) {
+      principalAxis = new THREE.Vector3(0, Math.sign(rotAxis.y), 0);
+    } else {
+      principalAxis = new THREE.Vector3(0, 0, Math.sign(rotAxis.z));
+    }
+
+    const angle = Math.PI / 2 * Math.sign(rotAxis.dot(principalAxis));
+    return { axis: principalAxis, angle };
+  }
+
+  function animateRotation(faceInfo, swipeDir) {
+    if (isAnimating) return;
+    const { axis, angle } = getRotationFromSwipe(faceInfo, swipeDir);
+    if (!axis) return;
+
+    const layerCubes = faceInfo.faceCubes;
+    if (layerCubes.length !== 9) return;
+
+    animationCubes = layerCubes;
+    animationOriginalPositions = layerCubes.map(c => c.position.clone());
+    layerCubes.forEach(c => {
+      c.userData.originalQuaternion = c.quaternion.clone();
+    });
+
+    animationAxis = axis;
+    animationAngle = angle;
+    animationStartTime = performance.now();
+    isAnimating = true;
+  }
+
+  function updateAnimation(now) {
+    if (!isAnimating || !animationAxis) return;
+    const elapsed = now - animationStartTime;
+    const t = Math.min(elapsed / animationDuration, 1);
+    const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+    const currentAngle = animationAngle * eased;
+
+    const rotQuat = new THREE.Quaternion().setFromAxisAngle(animationAxis, currentAngle);
+    const rotationMatrix = new THREE.Matrix4().makeRotationAxis(animationAxis, currentAngle);
+
+    animationCubes.forEach((cube, i) => {
+      const origPos = animationOriginalPositions[i];
+      const newPos = origPos.clone().applyMatrix4(rotationMatrix);
+      cube.position.copy(newPos);
+      const origQuat = cube.userData.originalQuaternion;
+      cube.quaternion.copy(origQuat).premultiply(rotQuat);
+    });
+
+    if (t >= 1) {
+      isAnimating = false;
+      animationCubes.forEach((cube, i) => {
+        const origPos = animationOriginalPositions[i];
+        const newPos = origPos.clone().applyMatrix4(rotationMatrix);
+        cube.position.set(
+          Math.round(newPos.x),
+          Math.round(newPos.y),
+          Math.round(newPos.z)
+        );
+        cube.quaternion.normalize();
+        cube.userData.logicalPos.set(
+          Math.round(cube.position.x),
+          Math.round(cube.position.y),
+          Math.round(cube.position.z)
+        );
+      });
+      animationAxis = null;
+      animationCubes = [];
+    }
+  }
+
+  // --- POINTER EVENTS ---
+  function onPointerDown(event) {
+    if (isAnimating) return;
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+
+    const rect = renderer.domElement.getBoundingClientRect();
+    pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+    raycaster.setFromCamera(pointer, camera);
+    const intersects = raycaster.intersectObjects(cubes);
+
+    if (intersects.length > 0) {
+      const hit = intersects[0];
+      const cube = hit.object;
+      const face = hit.face;
+      const worldNormal = getFaceNormal(face, cube);
+
+      const absX = Math.abs(worldNormal.x);
+      const absY = Math.abs(worldNormal.y);
+      const absZ = Math.abs(worldNormal.z);
+      let normal;
+      if (absX >= absY && absX >= absZ) normal = new THREE.Vector3(Math.sign(worldNormal.x), 0, 0);
+      else if (absY >= absX && absY >= absZ) normal = new THREE.Vector3(0, Math.sign(worldNormal.y), 0);
+      else normal = new THREE.Vector3(0, 0, Math.sign(worldNormal.z));
+
+      const faceInfo = getCubesOnFace(normal);
+      if (faceInfo.faceCubes.length === 9) {
+        activeFace = faceInfo;
+        pointerDown = true;
+        pointerDownPos.set(event.clientX, event.clientY);
+        pointerDownTime = performance.now();
+        pointerId = event.pointerId;
+        controls.enabled = false;
+      }
+    }
+  }
+
+  function onPointerUp(event) {
+    if (!pointerDown || !activeFace || isAnimating) {
+      pointerDown = false;
+      activeFace = null;
+      controls.enabled = true;
+      return;
+    }
+    if (pointerId !== null && event.pointerId !== pointerId) return;
+
+    const elapsed = performance.now() - pointerDownTime;
+    const endPos = new THREE.Vector2(event.clientX, event.clientY);
+    const dist = endPos.distanceTo(pointerDownPos);
+
+    if (dist >= swipeThreshold && elapsed < swipeTimeThreshold) {
+      const swipeDir = getSwipeDirection(pointerDownPos, endPos);
+      animateRotation(activeFace, swipeDir);
+    }
+
+    pointerDown = false;
+    activeFace = null;
+    pointerId = null;
+    controls.enabled = true;
+  }
+
+  function onPointerCancel() {
+    pointerDown = false;
+    activeFace = null;
+    pointerId = null;
+    controls.enabled = true;
+  }
+
+  renderer.domElement.addEventListener('pointerdown', onPointerDown);
+  renderer.domElement.addEventListener('pointerup', onPointerUp);
+  renderer.domElement.addEventListener('pointercancel', onPointerCancel);
+  renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  // --- RESIZE (works inside Streamlit iframe) ---
+  function handleResize() {
+    const w = container.clientWidth || window.innerWidth;
+    const h = container.clientHeight || window.innerHeight;
+    if (w === 0 || h === 0) return;
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    renderer.setSize(w, h, false);
+  }
+  window.addEventListener('resize', handleResize);
+
+  // Streamlit may resize the iframe after load — observe body
+  if (typeof ResizeObserver !== 'undefined') {
+    const ro = new ResizeObserver(() => handleResize());
+    ro.observe(container);
+  }
+
+  // --- RENDER LOOP ---
+  function animate(now) {
+    requestAnimationFrame(animate);
+    if (isAnimating) updateAnimation(now || performance.now());
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  requestAnimationFrame(animate);
+
+  // Hide instruction after 5s
+  setTimeout(() => {
+    const inst = document.getElementById('instruction');
+    if (inst) {
+      inst.style.transition = 'opacity 0.5s';
+      inst.style.opacity = '0';
+      setTimeout(() => inst.remove(), 500);
+    }
+  }, 5000);
 </script>
 </body>
 </html>
