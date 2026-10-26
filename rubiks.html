@@ -106,14 +106,15 @@
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-  camera.position.set(4, 4, 6);
+  camera.position.set(4.5, 4.5, 6.5);
+  camera.lookAt(0, 0, 0);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(width, height, false);
   renderer.domElement.style.width = '100%';
   renderer.domElement.style.height = '100%';
-  renderer.outputColorSpace = THREE.SRGBColorSpace; // 确保颜色正确
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
   container.appendChild(renderer.domElement);
 
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -122,8 +123,10 @@
   controls.enableZoom = true;
   controls.enablePan = false;
   controls.rotateSpeed = 0.8;
+  controls.minDistance = 4;
+  controls.maxDistance = 20;
+  controls.target.set(0, 0, 0);
 
-  // 增强光照，避免旋转后某些面太暗
   scene.add(new THREE.AmbientLight(0xffffff, 0.9));
   const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
   dirLight.position.set(10, 15, 10);
@@ -173,7 +176,6 @@
   const swipeThreshold = 15;
   const swipeTimeThreshold = 300;
 
-  // 旋转动画状态（使用 Group 方案）
   let animGroup = null;
   let animAxis = null;
   let animAngle = 0;
@@ -233,7 +235,6 @@
     return { axis, angle };
   }
 
-  // 核心：用 Group 包装旋转，避免法线/矩阵问题
   function rotateFace(faceInfo, axis, angle, onComplete) {
     if (isAnimating) return;
     isAnimating = true;
@@ -245,46 +246,44 @@
     animAxis = axis;
     animAngle = angle;
     animStart = performance.now();
+    group.userData.onComplete = onComplete || null;
 
-    // 将 9 个 cube 临时 attach 到 group 上（attach 会保持世界坐标）
     animCubes.forEach(c => group.attach(c));
-
-    if (onComplete) group.userData.onComplete = onComplete;
   }
 
   function updateAnimation(now) {
     if (!animGroup || !animAxis) return;
     const t = Math.min((now - animStart) / animDuration, 1);
     const eased = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+
     animGroup.rotation.set(0, 0, 0);
     animGroup.rotateOnAxis(animAxis, animAngle * eased);
 
     if (t >= 1) {
-      // 动画完成：将 cube 从临时 group attach 回 cubeGroup
-      animGroup.rotation.set(0, 0, 0); // 先归零（不重要，因为 cube 会被移走）
+      // attach back FIRST, while animGroup still holds final rotation
       const done = animGroup.userData.onComplete;
       animCubes.forEach(c => {
         cubeGroup.attach(c);
-        // 吸附到最近的网格位置
         c.position.set(
           Math.round(c.position.x),
           Math.round(c.position.y),
           Math.round(c.position.z)
         );
-        c.userData.logicalPos.set(
-          c.position.x, c.position.y, c.position.z
-        );
+        c.userData.logicalPos.set(c.position.x, c.position.y, c.position.z);
       });
+
+      animGroup.rotation.set(0, 0, 0);
       scene.remove(animGroup);
       animGroup = null;
       animAxis = null;
       animCubes = [];
       isAnimating = false;
+
       if (done) done();
     }
   }
 
-  // --- 随机打乱 ---
+  // --- SCRAMBLE ---
   const FACE_NORMALS = [
     new THREE.Vector3(1, 0, 0), new THREE.Vector3(-1, 0, 0),
     new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, -1, 0),
@@ -296,7 +295,6 @@
     const faceInfo = getCubesOnFace(normal);
     if (faceInfo.faceCubes.length !== 9) return null;
 
-    // 随机选择旋转轴（垂直于 normal 的两个轴之一）
     const axes = [];
     if (Math.abs(normal.x) < 0.1) axes.push(new THREE.Vector3(1, 0, 0));
     if (Math.abs(normal.y) < 0.1) axes.push(new THREE.Vector3(0, 1, 0));
@@ -309,30 +307,21 @@
 
   function doScramble(count = 20) {
     if (isAnimating) return;
+    scrambleBtn.disabled = true;
     let i = 0;
     function next() {
-      if (i >= count) {
-        scrambleBtn.disabled = false;
-        return;
-      }
+      if (i >= count) { scrambleBtn.disabled = false; return; }
       const move = randomScrambleMove();
-      if (move) {
-        rotateFace(move.faceInfo, move.axis, move.angle, () => {
-          i++;
-          next();
-        });
-      } else {
-        i++;
-        next();
-      }
+      if (!move) { i++; next(); return; }
+      i++;
+      rotateFace(move.faceInfo, move.axis, move.angle, next);
     }
-    scrambleBtn.disabled = true;
     next();
   }
 
   scrambleBtn.addEventListener('click', () => doScramble(20));
 
-  // --- 指针事件 ---
+  // --- POINTER EVENTS ---
   function onPointerDown(e) {
     if (isAnimating) return;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
@@ -389,19 +378,20 @@
   renderer.domElement.addEventListener('pointercancel', onPointerCancel);
   renderer.domElement.addEventListener('contextmenu', e => e.preventDefault());
 
-  // --- 尺寸 ---
+  // --- RESIZE ---
   function handleResize() {
     const w = container.clientWidth || window.innerWidth;
     const h = container.clientHeight || window.innerHeight;
-    if (!w || !h) return;
+    if (w < 2 || h < 2) return;
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
     renderer.setSize(w, h, false);
   }
   window.addEventListener('resize', handleResize);
   if (typeof ResizeObserver !== 'undefined') new ResizeObserver(handleResize).observe(container);
+  requestAnimationFrame(handleResize);
 
-  // --- 循环 ---
+  // --- LOOP ---
   function animate(now) {
     requestAnimationFrame(animate);
     if (animGroup) updateAnimation(now || performance.now());
